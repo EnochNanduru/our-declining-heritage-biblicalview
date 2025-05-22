@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive TFR Analysis Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Overview Text -> Goal: Introduce topic sensitively -> Viz: Formatted Text -> Interaction: None. -> Justification: Sets empathetic tone. -> Library: HTML/CSS.
+        - Report Info: What is TFR (Simple Explanation) -> Goal: Define TFR and its reduction simply, explain implications with gravity -> Viz: Formatted Text -> Interaction: None. -> Justification: Enhances understanding before data. -> Library: HTML/CSS.
+        - Report Info: National TFR Trends -> Goal: Compare, Change -> Viz: Line Chart (Chart.js) -> Interaction: Tooltips. -> Justification: Shows trends. -> Library: Chart.js.
+        - Report Info: State-Level TFR Trends -> Goal: Compare, Change -> Viz: Line Chart (Chart.js) -> Interaction: Selectors, tooltips. -> Justification: Focused analysis. -> Library: Chart.js.
+        - Report Info: State-Level TFR Trend Explanation -> Goal: Explain, Inform -> Viz: Text block -> Interaction: Button click (Gemini API). -> Justification: AI context for trends. -> Library: Vanilla JS, Gemini API.
+        - Report Info: Urban/Rural TFR Differentials -> Goal: Compare, Inform -> Viz: Bar Chart (Chart.js) + HTML Table -> Interaction: Static, tooltips, Horizontal line annotation at 2.1 TFR. -> Justification: Visual/tabular clarity, highlights replacement level. -> Library: Chart.js (with custom plugin).
+        - Report Info: Socio-Economic Determinants -> Goal: Inform, Organize -> Viz: Expandable Text Sections -> Interaction: Click to expand. -> Justification: Manages density. -> Library: Vanilla JS.
+        - Report Info: Demographic Implications -> Goal: Inform, Organize -> Viz: Expandable Text Sections -> Interaction: Click to expand. -> Justification: Clear presentation. -> Library: Vanilla JS.
+        - Report Info: Policy Implications of TFR Levels -> Goal: Explain, Inform -> Viz: Text block -> Interaction: Dropdown selection + Button click (Gemini API). -> Justification: AI insights on policy. -> Library: Vanilla JS, Gemini API.
+        - Report Info: Biblical Perspective -> Goal: Present user-provided theological perspective -> Viz: Formatted Text with hyperlinks -> Interaction: Hyperlinks. -> Justification: Incorporates user-specific content. -> Library: HTML/CSS.
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .table-cell {
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb; /* gray-200 */
+            text-align: left;
+        }
+        .table-header {
+            background-color: #f3f4f6; /* gray-100 */
+            font-weight: 600;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .nav-link {
+            transition: color 0.3s ease, border-bottom-color 0.3s ease;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #0369a1; /* sky-700 */
+            border-bottom-color: #0369a1; /* sky-700 */
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+        }
+        .content-link {
+            color: #0ea5e9; /* sky-500 */
+            text-decoration: underline;
+        }
+        .content-link:hover {
+            color: #0284c7; /* sky-600 */
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-neutral-800">
+
+    <nav id="navbar" class="sticky-nav shadow-md">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="font-bold text-xl text-sky-700">TFR Explorer</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#overview" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">Overview</a>
+                        <a href="#what-is-tfr" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">What is TFR?</a>
+                        <a href="#national-trends" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">National Trends</a>
+                        <a href="#state-analysis" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">State Analysis</a>
+                        <a href="#drivers-factors" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">Drivers & Factors</a>
+                        <a href="#implications" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">Implications</a>
+                        <a href="#biblical-perspective" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">Biblical Perspective</a>
+                        <a href="#about-data" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-neutral-600 hover:text-sky-700 border-b-2 border-transparent">About Data</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-neutral-500 hover:text-sky-700 hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-600">
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#overview" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">Overview</a>
+                <a href="#what-is-tfr" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">What is TFR?</a>
+                <a href="#national-trends" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">National Trends</a>
+                <a href="#state-analysis" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">State Analysis</a>
+                <a href="#drivers-factors" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">Drivers & Factors</a>
+                <a href="#implications" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">Implications</a>
+                <a href="#biblical-perspective" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">Biblical Perspective</a>
+                <a href="#about-data" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-neutral-600 hover:text-sky-700 hover:bg-neutral-200">About Data</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+
+        <section id="overview" class="mb-12 pt-16 -mt-16">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-6 text-sky-800">Understanding Our Changing World: A Look at Family Trends</h1>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-4 text-lg">
+                <p>Decisions about family are some of the most personal and significant choices we make in our lives. They are shaped by our individual hopes, dreams, personal circumstances, and the communities we live in. We understand that discussions around family size and fertility touch upon deeply personal aspects of life, often intertwined with cultural values, societal expectations, and individual well-being.</p>
+                <p>This explorer introduces a concept called the <strong class="text-sky-700">Total Fertility Rate (TFR)</strong>. It's not a measure of individual choices, but rather a way to see the bigger picture – how patterns of family life are evolving across our society and in different parts of the world, like India and the USA. Think of it as a gentle lens that helps us understand these collective shifts over time.</p>
+                <p>Why might this be relevant to you? These broader demographic trends can subtly shape the world around us – from the support systems available for families and children, to community planning, healthcare services, and even future economic landscapes. Understanding these changes can offer a clearer perspective on the evolving society we are all a part of, and how it might connect with our own experiences and aspirations.</p>
+                <p>Our aim here is to share information about these trends in an accessible and sensitive way. We'll look at how things have changed from the past and what they look like now in <strong class="text-teal-600">India</strong> and the <strong class="text-teal-600">United States</strong>, as well as in specific states like Maharashtra, Andhra Pradesh, Telangana (India), and Washington (USA). We hope this explorer empowers you with knowledge and perspective.</p>
+            </div>
+        </section>
+        
+        <section id="what-is-tfr" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">A Simple Guide: What is TFR and What Do Changes Mean?</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-4 text-lg">
+                <p>You might hear the term "Total Fertility Rate" or "TFR" in discussions about population or family trends. So, what does it actually mean in simple terms?</p>
+                <ul class="list-disc list-inside space-y-3 pl-4 text-neutral-700">
+                    <li>
+                        <strong class="text-sky-700">What is TFR?</strong> Imagine we could take a snapshot of all the women in a community right now and see, on average, how many children they might have throughout their lives if current trends continue. That snapshot gives us the TFR. For example, a TFR of 2 means that, on average, women are having about two children. It's a way to look at the overall pattern of family sizes in a society at a particular time.
+                    </li>
+                    <li>
+                        <strong class="text-sky-700">What does a reducing TFR mean?</strong> When we say the TFR is reducing, it simply means that, on average, families are having fewer children compared to the past. For instance, if the TFR was 4 in your grandmother's time and it's 2 now, it indicates a shift towards smaller average family sizes. This doesn't say anything about your personal choices, but it does show a broader change happening in society.
+                    </li>
+                    <li>
+                        <strong class="text-sky-700">Why is it important to understand these changes?</strong> While TFR helps governments plan for services like schools and healthcare, a continuously reducing TFR has deeper, more personal implications for our communities and future generations. When TFR falls very low for a long time, it means the overall population starts to shrink. This isn't just about numbers; it can mean that, over time, familiar family names might become less common or even disappear as fewer children are born to carry them on. Factors like marrying later in life, or choosing to have smaller families for various personal and societal reasons (which we explore later), all contribute to these broader TFR trends. Understanding this helps us see not just how society is changing, but also how these collective changes might touch our own lives and legacies. Awareness allows us to think about the future we are shaping together.
+                    </li>
+                </ul>
+                 <p class="mt-4 text-neutral-600">It's important to remember that TFR is a statistical average. This explorer aims to provide information about broader societal trends with sensitivity and respect for those individual choices.</p>
+            </div>
+        </section>
+
+        <section id="national-trends" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">National TFR Trajectories: India vs. USA</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <p class="mb-4 text-lg">Now that we have a basic understanding of TFR, let's look at the long-term TFR trends for India and the United States. This section visualizes these changes, highlighting key shifts and providing context on their demographic journeys. Both nations are currently below what's called "replacement level" (around 2.1 children, the number needed for a generation to replace itself), but their paths and paces differ significantly.</p>
+                <div class="chart-container mb-6">
+                    <canvas id="nationalTfrChart"></canvas>
+                </div>
+                <div class="grid md:grid-cols-2 gap-6 text-base">
+                    <div class="border-l-4 border-sky-500 pl-4">
+                        <h3 class="font-semibold text-xl mb-2 text-sky-700">India's TFR Journey</h3>
+                        <p>India has seen a remarkable and rapid decline in TFR, especially in recent decades. From a high TFR (e.g., 5.9 in 1960), it reached replacement levels and subsequently dropped below (around 2.0 in 2019-21, and 1.975 in 2023). This transition is driven by factors like increased education, family planning, and socio-economic changes. The pace of this decline is a key feature of India's demographic story.</p>
+                    </div>
+                    <div class="border-l-4 border-teal-500 pl-4">
+                        <h3 class="font-semibold text-xl mb-2 text-teal-700">USA's TFR Journey</h3>
+                        <p>The USA has experienced fertility levels at or below replacement for a longer period, generally since the early 1970s. After a post-war baby boom (TFR around 3.65 in 1960), it declined and has since fluctuated, currently standing around 1.62 (2023). This longer history of sub-replacement fertility has different implications for its population structure and societal adjustments compared to India.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="state-analysis" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">State-Level TFR Deep Dive</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <p class="mb-6 text-lg">Explore TFR dynamics within selected states in India and the USA. National averages often mask significant regional variations. Use the selectors below to view specific state trends.</p>
+                <div class="flex flex-wrap gap-4 mb-6 items-center">
+                    <div>
+                        <label for="countrySelect" class="block text-sm font-medium text-neutral-700">Select Country:</label>
+                        <select id="countrySelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md shadow-sm">
+                            <option value="India">India</option>
+                            <option value="USA">USA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="stateSelect" class="block text-sm font-medium text-neutral-700">Select State:</label>
+                        <select id="stateSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md shadow-sm">
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container mb-6">
+                    <canvas id="stateTfrChart"></canvas>
+                </div>
+                <div id="stateInfo" class="mt-4 p-4 border border-gray-200 rounded-md bg-stone-50">
+                    <p class="text-neutral-600">Select a country and state to see detailed TFR information and trends.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="drivers-factors" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">TFR Differentials & Influencing Factors</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-6">
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-sky-700">Urban vs. Rural TFR Differentials</h3>
+                    <p class="mb-4 text-base">Urban areas typically exhibit lower TFR compared to rural areas in both India and the USA. This section highlights these differences. The chart below includes a line indicating the general population replacement level.</p>
+                    <div class="overflow-x-auto mb-4">
+                        <table class="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-md">
+                            <thead class="bg-stone-50">
+                                <tr>
+                                    <th class="table-cell table-header">Region/State</th>
+                                    <th class="table-cell table-header">Data Source</th>
+                                    <th class="table-cell table-header">Urban TFR</th>
+                                    <th class="table-cell table-header">Rural TFR</th>
+                                    <th class="table-cell table-header">Difference (Rural Higher %)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="urbanRuralTableBody" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                     <div class="chart-container mb-6" style="max-width: 600px; height:300px;">
+                        <canvas id="urbanRuralTfrChart"></canvas>
+                    </div>
+                    <p class="text-sm text-neutral-500">Note: USA Urban TFR uses Large Metro Counties data; Rural TFR uses Rural Counties data (NCHS 2017).</p>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-sky-700">Socio-Economic Determinants (Focus on India)</h3>
+                    <p class="mb-4 text-base">Various socio-economic factors significantly influence TFR. Click on each factor to learn more.</p>
+                    <div id="socioEconomicFactors" class="space-y-3">
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-sky-700">Methodological Nuances in TFR Analysis</h3>
+                     <p class="mb-4 text-base">Understanding TFR requires appreciating certain methodological details. Click to expand.</p>
+                    <div id="methodologicalNuances" class="space-y-3">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="implications" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">Global Context & Broader Implications</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-6">
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-sky-700">Benchmarking TFRs</h3>
+                    <p class="text-base">India (TFR ~2.0) and the USA (TFR ~1.6) are both below the typical replacement level of 2.1. Globally, TFRs vary widely. For instance, the UN projected India's 2025 TFR at 1.94 (ranking 115th). Understanding these benchmarks helps place national and state trends in a global demographic context.</p>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-sky-700">Key Demographic Implications</h3>
+                    <p class="mb-4 text-base">Observed TFR trends have significant consequences. Click on each implication for details.</p>
+                    <div id="demographicImplications" class="space-y-3">
+                    </div>
+                </div>
+                 <div class="mt-6 p-4 border border-teal-200 bg-teal-50 rounded-md">
+                    <h4 class="font-semibold text-lg text-teal-700">Policy Considerations: A Converging Yet Diverging Path</h4>
+                    <p class="text-base mt-2">While both India and the USA show sub-replacement fertility, their policy challenges differ. The USA adapts to a more established aging society. India faces a dual task: leveraging its remaining demographic dividend (due to a younger population from past higher fertility) while preparing for future aging. India's significant internal TFR disparities (e.g., high TFR in Bihar vs. very low in Kerala/Tamil Nadu) add another layer of complexity not as pronounced in the US at the state level, where TFRs are more uniformly low.</p>
+                </div>
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h3 class="text-xl font-semibold mb-4 text-sky-700">✨ Explore Policy Implications of TFR Levels</h3>
+                    <p class="mb-4 text-base">Different Total Fertility Rate levels present unique sets of policy challenges and opportunities for societies. Select a TFR range below to get AI-generated insights on potential policy considerations.</p>
+                    <div class="flex flex-wrap gap-4 mb-4 items-center">
+                        <div>
+                            <label for="tfrLevelSelect" class="block text-sm font-medium text-neutral-700">Select TFR Level:</label>
+                            <select id="tfrLevelSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md shadow-sm">
+                                <option value="Very Low: < 1.5">Very Low: < 1.5</option>
+                                <option value="Low: 1.5 - 1.8">Low: 1.5 - 1.8</option>
+                                <option value="Near Replacement: 1.9 - 2.2" selected>Near Replacement: 1.9 - 2.2</option>
+                                <option value="Moderately Above Replacement: 2.3 - 3.0">Moderately Above Replacement: 2.3 - 3.0</option>
+                                <option value="High: > 3.0">High: > 3.0</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button id="getPolicyInsightsBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out text-sm mt-2 sm:mt-0 self-end">
+                                ✨ Get AI Policy Insights
+                            </button>
+                        </div>
+                    </div>
+                    <div id="aiPolicyInsightsResult" class="mt-4 p-3 border border-sky-200 bg-sky-50 rounded-md text-sm text-neutral-700" style="display: none;">
+                        </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="biblical-perspective" class="mb-12 pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">A Biblical Perspective on Women, Marriage, and Family</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg space-y-4 text-base text-neutral-700">
+                <p class="mb-4">Understanding societal trends like Total Fertility Rates can also involve exploring foundational beliefs about the purpose of individuals, marriage, and family. From a Christian perspective grounded in the Bible, these areas are seen as divinely instituted with specific designs and purposes.</p>
+
+                <h3 class="text-xl font-semibold mt-6 mb-3 text-sky-700">1. The Purpose and Role of Women</h3>
+                <p>The Bible teaches that both men and women are created in the image of God, possessing equal value, dignity, and spiritual standing before Him (Genesis 1:27; Galatians 3:28). Within this equality, Scripture indicates distinct, complementary roles and responsibilities.</p>
+                <ul class="list-disc list-inside space-y-2 pl-4 mt-2">
+                    <li><strong>Created as a Helper:</strong> In the creation account, woman was formed from man and for man to be a "helper corresponding to him" (Genesis 2:18, 20-23). This role is one of essential partnership and support.</li>
+                    <li><strong>Influence of the Fall:</strong> Genesis 3 describes the entry of sin and its consequences, which affected human relationships and roles. For women, part of the consequence involved pain in childbearing and a changed dynamic in the marital relationship (Genesis 3:16).</li>
+                    <li><strong>Home and Family as a Key Sphere:</strong> The New Testament encourages women, particularly wives and mothers, to find fulfillment in managing their households, loving their husbands and children, and cultivating a home environment that honors God (Titus 2:4-5; 1 Timothy 5:14). This sphere is presented as a primary area for their unique contributions and influence.
+                        <br class="my-1"><a href="https://www.gty.org/library/articles/DD08/the-role-of-women" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: The Role of Women - Grace to You</a>
+                        <br><a href="https://www.gty.org/library/sermons-library/1845/the-role-of-the-godly-woman" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: The Role of the Godly Woman</a>
+                    </li>
+                    <li><strong>Submission in God's Order:</strong> Within marriage and the church, the Bible calls for women to live in a spirit of submission to designated leadership, reflecting an ordered design established by God (Ephesians 5:22-24; Colossians 3:18; 1 Peter 3:1). This is presented as an act of obedience to God, mirroring the Church's submission to Christ.
+                        <br class="my-1"><a href="https://www.gty.org/library/bibleqnas-library/QA0022/wives-marriage-and-submission" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: Wives, Marriage, and Submission</a>
+                    </li>
+                </ul>
+                <p class="mt-2">This understanding emphasizes that a woman's identity and purpose are deeply rooted in her creation by God and the roles He has designed for her, which often find significant expression within the family.</p>
+                <p class="mt-3"><strong>Further Exploration:</strong> <a href="https://www.gty.org/library/topical-series-library/152/gods-high-calling-for-women" target="_blank" rel="noopener noreferrer" class="content-link">God's High Calling for Women (Sermon Series)</a> (This series includes discussion on 1 Timothy 2:9-15)</p>
+
+                <h3 class="text-xl font-semibold mt-6 mb-3 text-sky-700">2. The Purpose of Marriage</h3>
+                <p>Marriage, according to the Bible, is a divine institution, established by God at the beginning of creation (Genesis 2:24). It is not merely a social contract but a sacred covenant intended for lifelong companionship, mutual support, and the reflection of God's character.</p>
+                <ul class="list-disc list-inside space-y-2 pl-4 mt-2">
+                    <li><strong>Divine Institution:</strong> Jesus Himself affirmed the sanctity and divine origin of marriage (Matthew 19:4-6).</li>
+                    <li><strong>Companionship and Oneness:</strong> God designed marriage to alleviate loneliness and provide intimate companionship, where a husband and wife become "one flesh" (Genesis 2:18, 24).</li>
+                    <li><strong>Reflection of Christ and the Church:</strong> The relationship between a husband and wife is intended to mirror the loving, sacrificial relationship between Jesus Christ and the Church (Ephesians 5:22-33). This provides the ultimate model for marital love, submission, and unity.
+                         <br class="my-1"><a href="https://www.gty.org/library/sermons-library/49-35/the-divine-design-for-marriage-part-1" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: The Divine Design for Marriage, Part 1</a>
+                    </li>
+                    <li><strong>Procreation and Family:</strong> A key purpose of marriage is the procreation and raising of children within a stable, loving environment (Genesis 1:28; Psalm 127:3-5). Marriage provides the God-ordained context for bringing up the next generation.</li>
+                    <li><strong>Foundation for Society:</strong> Biblically ordered marriages are seen as the foundational building blocks for a healthy and stable society.</li>
+                </ul>
+                <p class="mt-2">Marriage is thus portrayed as a cornerstone of God's plan for humanity, intended for glory, human flourishing, and the nurturing of future generations. Sermons covering these aspects of marriage from Ephesians 5-6 can often be found in archives exploring those biblical passages.</p>
+
+                <h3 class="text-xl font-semibold mt-6 mb-3 text-sky-700">3. The Christian Mandate for Women (especially concerning Children and Family)</h3>
+                <p>From a biblical perspective, children are consistently described as a blessing and a heritage from the Lord (Psalm 127:3). The raising of children, particularly in the ways of God, is considered a high and noble calling for parents.</p>
+                <ul class="list-disc list-inside space-y-2 pl-4 mt-2">
+                    <li><strong>Children as a Blessing:</strong> Scripture presents children not as a burden, but as a gift and a reward from God (Psalm 127:3-5; Psalm 128:3). This perspective encourages an openness to and valuing of children.</li>
+                    <li><strong>The High Calling of Motherhood:</strong> Motherhood is presented as a significant and honored role. The nurture and training of children in godly principles is a primary responsibility given to parents, with mothers often playing a central role in the daily life and instruction of young children (Proverbs 1:8; Proverbs 31:26-28; Titus 2:4).
+                        <br class="my-1"><a href="https://www.gty.org/library/sermons-library/1253/profile-of-a-godly-mother" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: Profile of a Godly Mother</a>
+                        <br><a href="https://www.gty.org/library/sermons-library/1279/how-to-be-a-godly-mother" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: How to Be a Godly Mother</a>
+                    </li>
+                    <li><strong>"Saved Through Childbearing" (1 Timothy 2:15):</strong> The Apostle Paul writes that women "will be saved through childbearing—if they continue in faith and love and holiness, with self-control" (1 Timothy 2:15). This is generally understood not as referring to eternal salvation (which is by grace through faith in Christ alone), but that women find a particular path of sanctification, fulfillment of their God-given design, and protection from certain deceptions or stigmas by embracing their role in bearing and raising children in faith. It affirms the goodness of their God-ordained role within the family context, especially in counteracting the effects of the Fall related to their specific calling.
+                        <br class="my-1"><a href="https://www.gty.org/library/sermons-library/90-95/gods-high-calling-for-women-part-4" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: God's High Calling for Women, Part 4 (discusses 1 Timothy 2:15)</a> (Note: This is part of the "God's High Calling for Women" series linked earlier, URL: <a href="https://www.gty.org/library/topical-series-library/152/gods-high-calling-for-women" target="_blank" rel="noopener noreferrer" class="content-link">https://www.gty.org/library/topical-series-library/152/gods-high-calling-for-women</a>)
+                        <br><a href="https://www.gty.org/library/bibleqnas-library/QA0139/how-are-women-saved-through-childbearing" target="_blank" rel="noopener noreferrer" class="content-link">Related Resource: How Are Women 'Saved Through Childbearing'?</a>
+                    </li>
+                    <li><strong>Raising a Godly Heritage:</strong> The mandate for Christian parents is to diligently teach their children God's commands and truths, bringing them up in the "discipline and instruction of the Lord" (Deuteronomy 6:6-7; Ephesians 6:4). This is seen as crucial for the continuation of faith across generations.
+                    </li>
+                </ul>
+                <p class="mt-2">This biblical emphasis on children as a blessing and on the importance of raising them in a godly way provides a framework that encourages family life and the welcoming of children, which naturally informs perspectives on family size and fertility.</p>
+                <p class="mt-3"><strong>Further Exploration on Foundational Teachings:</strong> <a href="https://www.gty.org/library/articles/A176/how-important-is-genesis-13" target="_blank" rel="noopener noreferrer" class="content-link">How Important Is Genesis 1-3?</a></p>
+                <p class="mt-1"><strong>Blog Post on Titus 2 roles for women:</strong> <a href="https://www.gty.org/library/blog/B150713/reverent-women" target="_blank" rel="noopener noreferrer" class="content-link">Reverent Women</a></p>
+            </div>
+        </section>
+
+        <section id="about-data" class="pt-16 -mt-16">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-6 text-sky-800">About the Data & Sources</h2>
+            <div class="bg-white p-6 rounded-lg shadow-lg text-base">
+                <p class="mb-3">The analysis presented in this explorer is based on a comprehensive review of data from various reputable sources. The goal was to provide a robust understanding of TFR dynamics.</p>
+                <h4 class="font-semibold text-lg mb-2 text-sky-700">Primary Data Sources Include:</h4>
+                <ul class="list-disc list-inside space-y-1 text-neutral-700">
+                    <li>International Organizations: World Bank, United Nations (UN).</li>
+                    <li>National Statistical Agencies (India): National Family Health Survey (NFHS), Sample Registration System (SRS).</li>
+                    <li>National Statistical Agencies (USA): Centers for Disease Control and Prevention (CDC), National Center for Health Statistics (NCHS).</li>
+                    <li>State-Level Sources: Washington State Department of Health, CEICData (for aggregated Indian state data).</li>
+                    <li>Academic and Research Institutions.</li>
+                </ul>
+                <p class="mt-4 text-sm text-neutral-600">Data for specific years or regions, especially historical urban/rural breakdowns, can be fragmented. This explorer uses the most consistent data available from the source research plan. Charts may represent key data points rather than continuous annual series where full data is unavailable. All interpretations are based on the foundational research document.</p>
+            </div>
+        </section>
+    </div>
+
+    <footer class="bg-neutral-800 text-neutral-300 text-center p-6 mt-12">
+        <p>&copy; 2024 TFR Analysis Explorer. Content based on "Foundational Framework and Detailed Research Plan for Total Fertility Rate (TFR) Analysis". AI-powered insights by Gemini.</p>
+    </footer>
+
+    <script>
+        let nationalTfrChartInstance = null;
+        let stateTfrChartInstance = null;
+        let urbanRuralTfrChartInstance = null;
+
+        const nationalTfrData = {
+            India: { years: [1960, 1992, 2005, 2015, 2020, 2023], tfr: [5.9, 3.4, 2.7, 2.2, 2.0, 1.975] },
+            USA: { years: [1960, 1971, 1990, 2006, 2020, 2023], tfr: [3.65, 2.27, 2.08, 2.1, 1.64, 1.6165] }
+        };
+
+        const stateData = {
+            India: {
+                Maharashtra: { years: [1993, 1999, 2006, 2016, 2020, 2021], tfr: [2.9, 2.5, 2.1, 1.9, 1.68, 1.5], urbanRural: { urban: 1.44, rural: 1.89, source: "NFHS-5 (2019-21)" }, info: "Maharashtra has shown a consistent decline, with urban TFR significantly lower than rural. It's one of India's more economically advanced states with early fertility decline." },
+                'Andhra Pradesh': { years: [1993, 2006, 2016, 2020, 2021], tfr: [2.6, 1.8, 1.8, 1.70, 1.5], urbanRural: { urban: 1.62, rural: 1.74, source: "NFHS-5 (2019-21)" }, info: "Andhra Pradesh reached sub-replacement levels relatively early among Indian states. The urban-rural gap is present but less pronounced than in Maharashtra." },
+                Telangana: { years: [2016, 2020, 2021], tfr: [1.8, 1.82, 1.6], urbanRural: { urban: 1.63, rural: 1.95, source: "NFHS-5 (2019-21)" }, info: "Telangana, a newer state, also shows sub-replacement TFR. Rural TFR remains notably higher than urban TFR." }
+            },
+            USA: {
+                'Washington': { years: [2017, 2020, 2021, 2023], tfr: [1.65, 1.54, 1.56, 1.47], urbanRural: { urban: 1.712, rural: 1.950, source: "NCHS (2017, National USA - as proxy)" }, info: "Washington State exhibits a TFR notably below the US national average, indicating very low fertility. Consistent historical data series can be challenging to compile." }
+            }
+        };
+        
+        const urbanRuralTableData = [
+            { region: "India (National)", source: "NFHS-5 (2019-21)", urban: 1.6, rural: 2.1 },
+            { region: "Maharashtra", source: "NFHS-5 (2019-21)", urban: 1.44, rural: 1.89 },
+            { region: "Andhra Pradesh", source: "NFHS-5 (2019-21)", urban: 1.62, rural: 1.74 },
+            { region: "Telangana", source: "NFHS-5 (2019-21)", urban: 1.63, rural: 1.95 },
+            { region: "USA (National Proxy)", source: "NCHS (2017)", urban: 1.712, rural: 1.950 }
+        ];
+
+        const socioEconomicFactorsData = [
+            { title: "Female Education", content: "Higher levels of female education are consistently linked to lower TFR. Educated women often marry later, have better access to information about family planning, and may desire smaller families due to career aspirations or increased awareness of child-rearing costs." },
+            { title: "Women's Empowerment", content: "Greater autonomy for women in household decisions, including reproductive choices and healthcare, is associated with lower fertility rates. Empowerment can lead to increased contraceptive use and desired family sizes." },
+            { title: "Economic Development & Wealth", content: "Economic progress, shifts from agrarian to industrial/service economies, and changes in intergenerational wealth flows are significant drivers of fertility decline. TFR often varies by wealth quintile." },
+            { title: "Family Planning Programs & Contraceptive Use", content: "Accessibility, availability, affordability, and acceptance of family planning services and modern contraceptive methods are crucial determinants of TFR. Effective programs have played a major role in TFR reduction." },
+            { title: "Maternal and Child Health Improvements", content: "Reduced infant and child mortality lessens the perceived need for 'replacement' births, contributing to lower TFR. Improved healthcare and nutrition play a vital role." },
+            { title: "Cultural and Social Norms", content: "Prevailing norms regarding ideal family size, age at marriage, and societal expectations influence fertility decisions. These norms can change over time with modernization." }
+        ];
+
+        const methodologicalNuancesData = [
+            { title: "Tempo and Quantum Effects", content: "It's important to distinguish between changes in the *timing* of births (tempo effects) and changes in the *total number* of children women have (quantum effects). A decline in TFR might be partly due to women delaying childbirth rather than deciding to have fewer children overall." },
+            { title: "Total Marital Fertility Rate (TMFR)", content: "TMFR measures fertility within marriage. Comparing TFR with TMFR can offer insights into whether changes in marriage patterns (e.g., rising age at marriage) are key drivers of TFR decline." },
+            { title: "Age-Specific Fertility Rates (ASFRs)", content: "TFR is a summary measure derived from ASFRs (birth rates for women in specific age groups). Shifts in the age patterns of childbearing directly influence the TFR value." }
+        ];
+        
+        const demographicImplicationsData = [
+            { title: "Population Aging", content: "Sustained sub-replacement fertility inevitably leads to an increase in the proportion of older persons in a population. This has significant implications for healthcare systems, social security, pension funds, and labor markets." },
+            { title: "The Demographic Dividend", content: "For countries like India that have experienced rapid TFR declines, a 'demographic dividend' can occur—a period where the working-age population is proportionally larger, potentially fueling economic growth if supported by investments in education, health, and job creation." },
+            { title: "Policy Dichotomies & Challenges", content: "Low TFR regions face challenges of aging populations and potential labor shortages. High TFR regions may need continued focus on family planning and maternal/child health. Managing these diverse demographic realities requires tailored policies." },
+            { title: "Social and Economic Shifts", content: "Changes in TFR can influence family structures, workforce participation, demand for education and childcare services, and overall economic consumption patterns." }
+        ];
+
+        Chart.defaults.font.family = 'Inter, sans-serif';
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        Chart.defaults.plugins.tooltip.titleFont = { size: 14, weight: 'bold' };
+        Chart.defaults.plugins.tooltip.bodyFont = { size: 12 };
+        Chart.defaults.plugins.legend.labels.boxWidth = 15;
+        Chart.defaults.plugins.legend.labels.padding = 15;
+
+        function renderNationalTfrChart() {
+            const ctx = document.getElementById('nationalTfrChart').getContext('2d');
+            if (nationalTfrChartInstance) nationalTfrChartInstance.destroy();
+            nationalTfrChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: nationalTfrData.India.years.map(String),
+                    datasets: [
+                        { label: 'India TFR', data: nationalTfrData.India.tfr, borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.1, fill: true },
+                        { label: 'USA TFR', data: nationalTfrData.USA.tfr, borderColor: 'rgb(20, 184, 166)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.1, fill: true }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, title: { display: true, text: 'Total Fertility Rate (TFR)' } }, x: { title: { display: true, text: 'Year' } } }, plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } } }
+            });
+        }
+
+        function renderStateTfrChart(country, stateName) {
+            const ctx = document.getElementById('stateTfrChart').getContext('2d');
+            const stateInfoData = stateData[country]?.[stateName];
+            const stateInfoDiv = document.getElementById('stateInfo');
+
+            if (stateTfrChartInstance) stateTfrChartInstance.destroy();
+            
+            const aiExplanationResultDiv = document.getElementById('aiExplanationResult');
+            if (aiExplanationResultDiv) aiExplanationResultDiv.style.display = 'none';
+
+
+            if (!stateInfoData) {
+                stateInfoDiv.innerHTML = `<p class="text-neutral-600">Data not available for ${stateName}.</p>`;
+                return;
+            }
+            
+            const chartColor = country === 'India' ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
+            stateTfrChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stateInfoData.years.map(String),
+                    datasets: [{ label: `${stateName} TFR`, data: stateInfoData.tfr, borderColor: chartColor, backgroundColor: chartColor.replace('rgb', 'rgba').replace(')', ', 0.1)'), tension: 0.1, fill: true }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, title: { display: true, text: 'TFR' } }, x: { title: { display: true, text: 'Year (approx.)' } } }, plugins: { legend: { display: true, position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label || ''}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : ''}` } } } }
+            });
+
+            let urbanRuralText = 'Urban/Rural TFR data not specified in detail for this period in the source.';
+            if (stateInfoData.urbanRural) {
+                urbanRuralText = `Urban TFR: ${stateInfoData.urbanRural.urban}, Rural TFR: ${stateInfoData.urbanRural.rural} (Source: ${stateInfoData.urbanRural.source}).`;
+                 if (country === 'USA' && stateName === 'Washington' && stateInfoData.urbanRural.source.includes("National USA - as proxy")) {
+                    urbanRuralText += " Note: National US urban/rural data used as proxy for Washington State.";
+                }
+            }
+            stateInfoDiv.innerHTML = `
+                <h4 class="font-semibold text-lg mb-1 text-sky-700">${stateName}, ${country}</h4>
+                <p class="text-neutral-700 mb-2">${stateInfoData.info}</p>
+                <p class="text-sm text-neutral-600 mb-3">${urbanRuralText}</p>
+                <button id="generateAiExplanationBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out text-sm">
+                    ✨ Get AI Explanation for Trends
+                </button>
+                <div id="aiExplanationResult" class="mt-4 p-3 border border-sky-200 bg-sky-50 rounded-md text-sm text-neutral-700" style="display: none;"></div>
+            `;
+        }
+        
+        async function fetchAiExplanation(country, stateName, years, tfrValues) {
+            const resultDiv = document.getElementById('aiExplanationResult');
+            const button = document.getElementById('generateAiExplanationBtn');
+            if (!resultDiv || !button) return;
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="text-center animate-pulse text-sky-600">✨ Fetching insights from AI...</p>';
+            button.disabled = true;
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const tfrDataString = years.map((year, index) => `${year}: ${tfrValues[index]}`).join(', ');
+            const prompt = `You are a demographic analyst. Based on the following Total Fertility Rate (TFR) data for ${stateName}, ${country}: ${tfrDataString}. Briefly explain, in about 3-4 concise paragraphs, the likely socio-economic factors, policy influences, and cultural shifts that could have contributed to this TFR trend. Focus on the period from ${years[0]} to ${years[years.length - 1]}. Highlight any significant changes or periods of acceleration/deceleration if apparent from the data. Ensure the explanation is suitable for a general audience interested in demographic trends and present it in well-structured paragraphs.`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Gemini API error (State Trend):", errorData);
+                    throw new Error(`API request failed with status ${response.status}: ${errorData.error?.message || response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    resultDiv.innerHTML = `<h5 class="font-semibold mb-2 text-sky-700">✨ AI-Generated Explanation:</h5><p>${text.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
+                } else {
+                    console.error("Unexpected response structure (State Trend):", result);
+                    resultDiv.innerHTML = '<p class="text-red-600">Could not retrieve explanation. The AI response was not in the expected format.</p>';
+                }
+            } catch (error) {
+                console.error('Error fetching AI explanation (State Trend):', error);
+                resultDiv.innerHTML = `<p class="text-red-600">An error occurred while fetching the AI explanation: ${error.message}. Please try again later.</p>`;
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        async function fetchPolicyInsights() {
+            const tfrLevel = document.getElementById('tfrLevelSelect').value;
+            const resultDiv = document.getElementById('aiPolicyInsightsResult');
+            const button = document.getElementById('getPolicyInsightsBtn');
+
+            if (!resultDiv || !button) return;
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="text-center animate-pulse text-sky-600">✨ Fetching policy insights from AI...</p>';
+            button.disabled = true;
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const prompt = `You are a socio-economic policy advisor. A region is experiencing a Total Fertility Rate (TFR) described as "${tfrLevel}". In 3-4 concise paragraphs, explain the general policy challenges and opportunities typically associated with this TFR level. Consider areas like labor market, healthcare, education, social security, economic growth, and family support policies. Provide a balanced overview suitable for policymakers and the general public.`;
+            
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Gemini API error (Policy Insights):", errorData);
+                    throw new Error(`API request failed with status ${response.status}: ${errorData.error?.message || response.statusText}`);
+                }
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                     resultDiv.innerHTML = `<h5 class="font-semibold mb-2 text-sky-700">✨ AI-Generated Policy Insights for TFR Level "${tfrLevel}":</h5><p>${text.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
+                } else {
+                    console.error("Unexpected response structure (Policy Insights):", result);
+                    resultDiv.innerHTML = '<p class="text-red-600">Could not retrieve policy insights. The AI response was not in the expected format.</p>';
+                }
+            } catch (error) {
+                console.error('Error fetching AI policy insights:', error);
+                resultDiv.innerHTML = `<p class="text-red-600">An error occurred while fetching AI policy insights: ${error.message}. Please try again later.</p>`;
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function renderUrbanRuralTfrChart() {
+            const ctx = document.getElementById('urbanRuralTfrChart').getContext('2d');
+            const labels = urbanRuralTableData.map(d => d.region.replace(" (National Proxy)","*"));
+            const urbanData = urbanRuralTableData.map(d => d.urban);
+            const ruralData = urbanRuralTableData.map(d => d.rural);
+
+            if (urbanRuralTfrChartInstance) urbanRuralTfrChartInstance.destroy();
+            
+            const customAnnotationPlugin = {
+                id: 'customHorizontalLineAnnotation',
+                afterDraw: function(chart, args, options) {
+                    const {ctx, chartArea, scales: {x, y} } = chart;
+
+                    if (!y || typeof y.getPixelForValue !== 'function' || !chartArea) {
+                        return;
+                    }
+                    const {left, right, top, bottom} = chartArea;
+                    const yValue = 2.1; 
+                    const yPos = y.getPixelForValue(yValue);
+
+                    if (yPos < top || yPos > bottom) { 
+                        return; 
+                    }
+
+                    ctx.save();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(left, yPos);
+                    ctx.lineTo(right, yPos);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; 
+                    ctx.setLineDash([5, 5]); 
+                    ctx.stroke();
+                    
+                    const annotationText = "Replacement Level (2.1) - for population sustainability";
+                    ctx.font = '10px Inter, sans-serif';
+                    ctx.fillStyle = 'rgba(239, 68, 68, 1)';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'bottom'; 
+                    
+                    let textXPosition = right - 5;
+                    const textMetrics = ctx.measureText(annotationText);
+                    const textWidth = textMetrics.width;
+                    
+                    if (textXPosition < left + textWidth + 5 && right - left > textWidth + 10) { 
+                        ctx.textAlign = 'left';
+                        textXPosition = left + 5;
+                    } else if (right - left <= textWidth + 10) { 
+                        ctx.textAlign = 'center';
+                        textXPosition = left + (right - left) / 2;
+                    }
+
+                    ctx.fillText(annotationText, textXPosition, yPos - 5);
+                    
+                    ctx.restore();
+                }
+            };
+
+            urbanRuralTfrChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Urban TFR', data: urbanData, backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 },
+                        { label: 'Rural TFR', data: ruralData, backgroundColor: 'rgba(20, 184, 166, 0.7)', borderColor: 'rgb(20, 184, 166)', borderWidth: 1 }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        y: { beginAtZero: true, title: { display: true, text: 'Total Fertility Rate (TFR)' } }, 
+                        x: { ticks: { callback: function(val, idx) { const label = this.getLabelForValue(val); return label.length > 15 ? label.match(/.{1,15}/g) : label; } } } 
+                    }, 
+                    plugins: { 
+                        legend: { position: 'top' }, 
+                        tooltip: { mode: 'index', intersect: false }
+                    } 
+                },
+                plugins: [customAnnotationPlugin] 
+            });
+        }
+
+
+        function populateStateSelector(country) {
+            const stateSelect = document.getElementById('stateSelect');
+            stateSelect.innerHTML = '';
+            const states = Object.keys(stateData[country] || {});
+            states.forEach(stateName => {
+                const option = document.createElement('option');
+                option.value = stateName; option.textContent = stateName;
+                stateSelect.appendChild(option);
+            });
+            if (states.length > 0) renderStateTfrChart(country, states[0]);
+            else {
+                if (stateTfrChartInstance) stateTfrChartInstance.destroy();
+                document.getElementById('stateInfo').innerHTML = `<p class="text-neutral-600">No states available for the selected country.</p>`;
+            }
+        }
+        
+        function populateUrbanRuralTable() {
+            const tableBody = document.getElementById('urbanRuralTableBody');
+            tableBody.innerHTML = '';
+            urbanRuralTableData.forEach(item => {
+                const diff = ((item.rural - item.urban) / item.urban * 100).toFixed(1);
+                tableBody.innerHTML += `<tr><td class="table-cell">${item.region}</td><td class="table-cell">${item.source}</td><td class="table-cell">${item.urban.toFixed(3)}</td><td class="table-cell">${item.rural.toFixed(3)}</td><td class="table-cell">${diff}%</td></tr>`;
+            });
+        }
+
+        function createAccordionItem(id, title, content) {
+            return `<div class="border border-gray-200 rounded-md"><button class="accordion-button w-full flex justify-between items-center p-4 text-left bg-stone-50 hover:bg-stone-200 focus:outline-none transition duration-150 ease-in-out" data-target="${id}"><span class="font-medium text-neutral-700">${title}</span><svg class="accordion-icon w-5 h-5 text-neutral-500 transform transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="${id}" class="accordion-content p-4 border-t border-gray-200 bg-white"><p class="text-neutral-600">${content}</p></div></div>`;
+        }
+
+        function populateAccordions() {
+            const socioEconomicContainer = document.getElementById('socioEconomicFactors');
+            socioEconomicFactorsData.forEach((item, index) => socioEconomicContainer.innerHTML += createAccordionItem(`sef-${index}`, item.title, item.content));
+            
+            const methodologicalContainer = document.getElementById('methodologicalNuances');
+            methodologicalNuancesData.forEach((item, index) => methodologicalContainer.innerHTML += createAccordionItem(`mn-${index}`, item.title, item.content));
+
+            const implicationsContainer = document.getElementById('demographicImplications');
+            demographicImplicationsData.forEach((item, index) => implicationsContainer.innerHTML += createAccordionItem(`di-${index}`, item.title, item.content));
+
+            document.querySelectorAll('.accordion-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const content = document.getElementById(button.dataset.target);
+                    const icon = button.querySelector('.accordion-icon');
+                    if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                        content.style.maxHeight = '0px'; icon.classList.remove('rotate-180');
+                    } else {
+                        content.style.maxHeight = content.scrollHeight + "px"; icon.classList.add('rotate-180');
+                    }
+                });
+            });
+        }
+        
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        mobileMenuButton.addEventListener('click', () => {
+            mobileMenuButton.setAttribute('aria-expanded', String(mobileMenu.classList.toggle('hidden')));
+            mobileMenuButton.querySelectorAll('svg').forEach(s => s.classList.toggle('hidden'));
+        });
+
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetElement = document.querySelector(this.getAttribute('href'));
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    if (!mobileMenu.classList.contains('hidden')) {
+                         mobileMenu.classList.add('hidden');
+                         mobileMenuButton.setAttribute('aria-expanded', 'false');
+                         mobileMenuButton.querySelectorAll('svg').forEach(s => s.classList.toggle('hidden'));
+                    }
+                }
+            });
+        });
+        
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.nav-link');
+        window.onscroll = () => {
+            let current = '';
+            sections.forEach(section => {
+                if (pageYOffset >= section.offsetTop - (document.getElementById('navbar').offsetHeight + 20)) {
+                    current = section.getAttribute('id');
+                }
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('active', 'text-sky-700', 'border-sky-700');
+                link.classList.add('text-neutral-600', 'border-transparent');
+                if (link.getAttribute('href').substring(1) === current) {
+                    link.classList.add('active', 'text-sky-700', 'border-sky-700');
+                    link.classList.remove('text-neutral-600', 'border-transparent');
+                }
+            });
+        };
+
+        document.getElementById('countrySelect').addEventListener('change', (e) => populateStateSelector(e.target.value));
+        document.getElementById('stateSelect').addEventListener('change', (e) => {
+            const country = document.getElementById('countrySelect').value;
+            renderStateTfrChart(country, e.target.value);
+        });
+
+        document.getElementById('stateInfo').addEventListener('click', async function(event) {
+            if (event.target && event.target.id === 'generateAiExplanationBtn') {
+                const currentCountry = document.getElementById('countrySelect').value;
+                const currentStateName = document.getElementById('stateSelect').value;
+                const stateDetails = stateData[currentCountry]?.[currentStateName];
+                if (stateDetails) {
+                    await fetchAiExplanation(currentCountry, currentStateName, stateDetails.years, stateDetails.tfr);
+                } else {
+                    console.error("Could not find state details for AI explanation.");
+                    const resultDiv = document.getElementById('aiExplanationResult');
+                    if(resultDiv) {
+                         resultDiv.style.display = 'block';
+                         resultDiv.innerHTML = '<p class="text-red-600">Error: Could not load data for the selected state to generate explanation.</p>';
+                    }
+                }
+            }
+        });
+
+        document.getElementById('getPolicyInsightsBtn').addEventListener('click', fetchPolicyInsights);
+
+        window.onload = () => {
+            renderNationalTfrChart();
+            populateStateSelector(document.getElementById('countrySelect').value);
+            populateUrbanRuralTable();
+            renderUrbanRuralTfrChart();
+            populateAccordions();
+            window.dispatchEvent(new Event('scroll'));
+        };
+    </script>
+</body>
+</html>
